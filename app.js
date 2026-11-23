@@ -1,10 +1,10 @@
 const app = document.querySelector('#app');
 const notice = document.querySelector('#notice');
 const switcher = document.querySelector('#switcher');
-const labels = {bank: '题库', past: '历年真题', original: '题库原题', review: '错题复习', exam: '自定义考试'};
+const labels = {bank: '题库', outline: '考纲专题', development: '开发规范', past: '历年真题', original: '题库原题', review: '错题复习', exam: '自定义考试'};
 const letters = 'ABCD';
 const kinds = {single:'单选', multiple:'多选', judge:'判断', number:'填空', code:'大题'};
-const sources = {past:'历年真题', supplied:'题库原题', ai:'AI 模拟题'};
+const sources = {past:'历年真题', supplied:'题库原题', ai:'AI 模拟题', development:'规范专题'};
 let courses = [], course, page, epoch = 0, timer;
 let practice, exam, history, index, busy = false;
 
@@ -38,8 +38,8 @@ function action(label, id, {kind = '', value = '', disabled = false} = {}) {
     '" data-value="' + esc(value) + '"' + (disabled ? ' disabled' : '') + '>' + label + '</button>';
 }
 function views(c) {
-  return Object.entries(labels).filter(([id]) => id !== 'original' || c.originals)
-    .filter(([id]) => id !== 'past' || c.pasts);
+  const availability = {original:c.originals, past:c.pasts, outline:c.outline, development:c.development};
+  return Object.entries(labels).filter(([id]) => !Object.hasOwn(availability,id) || availability[id]);
 }
 function tabs() {
   return '<h1>' + course.name + '</h1><nav class="tabs" aria-label="练习方式">' +
@@ -73,9 +73,9 @@ async function navigate() {
     if (version !== epoch) return;
     courses = overview;
     course = courses.find(c => c.id === id);
-    page = view in labels && Object.hasOwn(labels,view) ? view : 'bank';
+    page = course && views(course).some(([key])=>key===view) ? view : 'bank';
     document.title = course ? course.name + ' · ' + (views(course).find(([id]) => id === page)?.[1] || labels.bank) : '刷题';
-    switcher.innerHTML = courses.map(c => '<a href="' + link(c.id, course ? page : 'bank') + '"' +
+    switcher.innerHTML = courses.map(c => '<a href="' + link(c.id, views(c).some(([key])=>key===page) ? page : 'bank') + '"' +
       (c.id === course?.id ? ' aria-current="true"' : '') + '>' + c.name + '</a>').join('') +
       '';
     if (!course) return home();
@@ -146,10 +146,12 @@ function selectOptions(items, value) {
     '>' + esc(label) + '</option>').join('');
 }
 function facetControls(p) {
-  const topics = [...new Map(p.all.filter(q=>q.topicCode).map(q=>[q.topicCode,q.topic]))];
+  const topics = [...new Map(p.all.filter(q=>q.topicCode && matchesFilter(q,p.filter)).map(q=>
+    [q.topicCode,page==='development' ? q.topicCode+' '+q.topic : q.topic]))];
   const options = {
-    source: ['来源', Object.entries(sources).filter(([id])=>p.all.some(q=>q.source===id))],
-    topicCode: ['考点', topics],
+    source: ['来源', ['outline','development'].includes(page) ? [] : Object.entries(sources).filter(([id])=>p.all.some(q=>q.source===id))],
+    topicCode: [page==='development' ? '条款' : '考点', topics],
+    level: ['规范级别', [...new Set(p.all.map(q=>q.level).filter(Boolean))].map(level=>[level,level])],
     type: ['题型', [...Object.entries(kinds), ['reference','参考题'], ['reference-multiple','多选参考题']]
       .filter(([id])=>p.all.some(q=>q.type===id))],
     paper: ['范围', [...new Set(p.all.map(q=>q.paper).filter(Boolean))].map(paper=>[paper,paper])],
@@ -164,10 +166,16 @@ function facetControls(p) {
 function renderPractice() {
   const p = practice;
   const q = p.items[p.index];
-  const filters = course.modules;
-  const moduleList = [{name:'', label:'全部'}].concat(filters);
+  const topicPage = page==='development' || page==='outline';
+  const chapterHeading = topicPage ? '<h2>' + labels[page] + '</h2><p class="muted">' +
+    p.all.length + ' 道题 · ' + new Set(p.all.map(item=>item.module)).size + ' 个章节' +
+    (page==='development' ? ' · 按附件规范作答' : ' · 按考纲章节和考点练习') + '</p>' : '';
+  const filters = ['development','review'].includes(page) ? [...new Map(p.all.map(item=>[item.module,
+    {name:item.module,label:item.chapter ? item.chapter+' '+item.module : item.module}])).values()] :
+    course.modules.filter(m=>!topicPage || p.all.some(item=>item.module===m.name));
+  const moduleList = [{name:'', label:topicPage?'全部章节':'全部'}].concat(filters);
   const modules = moduleList.map(m =>
-    action(esc(m.label || m.name) + '<span class="count">' +
+    action('<span>' + esc(m.label || m.name) + '</span><span class="count">' +
       p.all.filter(item => matchesFilter(item,m.name) && matchesFacets(item,p.facets)).length + '</span>',
     'filter', {value:m.name,kind:p.filter===m.name?'chosen':''})).join('');
   const last = p.index + 1 === p.items.length;
@@ -185,11 +193,12 @@ function renderPractice() {
     '</h2>' + (p.filter || Object.values(p.facets).some(Boolean) ? action('清除筛选','clear-filters') :
       '<a href="' + link(course.id,'bank') + '">进入题库</a>') + '</div>';
   const activeCount = Number(Boolean(p.filter)) + Object.values(p.facets).filter(Boolean).length;
-  show('<div class="workbench practice-workbench"><button type="button" class="filter-toggle" data-action="toggle-filters"' +
-    ' aria-controls="practice-filters" aria-expanded="' + Boolean(p.filtersOpen) + '">筛选题目' +
+  show((chapterHeading ? '<div class="topic-heading">' + chapterHeading + '</div>' : '') +
+    '<div class="workbench practice-workbench"><button type="button" class="filter-toggle" data-action="toggle-filters"' +
+    ' aria-controls="practice-filters" aria-expanded="' + Boolean(p.filtersOpen) + '">' + (topicPage ? '选择章节和筛选' : '筛选题目') +
     (activeCount ? '<span>已选 ' + activeCount + ' 项</span>' : '') + '</button>' +
     '<div id="practice-filters" class="practice-filters' + (p.filtersOpen ? ' is-open' : '') + '">' +
-    facetControls(p) + '<aside class="panel side modules" aria-label="模块">' + modules +
+    facetControls(p) + '<aside class="panel side modules" aria-label="' + (topicPage?'章节':'模块') + '">' + modules +
     '</aside></div><section class="panel question">' + inner + '</section></div>');
 }
 function resetPractice(position) {
@@ -310,7 +319,6 @@ app.addEventListener('change', event => {
   if (option.name === 'exam-kind') return updateExamCounts(option.value);
   if (option.name?.startsWith('facet-')) {
     practice.facets[option.name.slice(6)] = option.value;
-    if (option.name === 'facet-topicCode' && option.value) practice.filter = '';
     return filterPractice(option);
   }
   if (option.name !== 'answer' && !(page === 'exam' && ['number','exam-written'].includes(option.name))) return;
@@ -360,6 +368,9 @@ app.addEventListener('click', event => {
   if (id === 'reload' || id === 'exam-back') return navigate();
   if (id === 'filter') {
     practice.filter = value;
+    if (practice.facets.topicCode && !practice.all.some(q=>matchesFilter(q,value) && q.topicCode===practice.facets.topicCode)) {
+      practice.facets.topicCode = '';
+    }
     return filterPractice(button);
   }
   if (id === 'clear-filters') {

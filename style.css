@@ -107,6 +107,9 @@ input:not([type=radio]):not([type=checkbox]),select{border:1px solid #a5bdaf;bor
 .login form{display:grid;gap:12px}
 .storage-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:24px 0;color:var(--muted);font-size:.85rem}.storage-tools label{cursor:pointer}
 .filter-toggle{display:none}
+.topic-heading{margin-bottom:12px}
+.topic-heading h2{margin-bottom:2px}
+.topic-heading p{margin:0}
 .practice-filters{display:contents}
 .practice-filters .facets{grid-column:1 / -1;margin:0}
 
@@ -133,7 +136,7 @@ input:not([type=radio]):not([type=checkbox]),select{border:1px solid #a5bdaf;bor
   .practice-filters.is-open{display:grid;gap:10px}
   .facets{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px}
   .side.modules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:8px}
-  .side button{gap:4px;padding-inline:8px}
+  .side button{gap:4px;padding-inline:8px;overflow-wrap:anywhere}
   .panel{padding:14px}
   .question{min-width:0;scroll-margin-top:10px}
   .question h2{font-size:1.15rem;line-height:1.5}

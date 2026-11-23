@@ -72,11 +72,15 @@ async function localApi(path, body) {
     wrong:questions.filter(q=>q.course===id && needsReview(q)).length,
     originals:questions.filter(q=>q.course===id && q.source==='supplied').length,
     pasts:questions.filter(q=>q.course===id && q.source==='past').length,
-    total:questions.filter(q=>q.course===id).length}));
+    development:questions.filter(q=>q.course===id && q.source==='development').length,
+    outline:questions.filter(q=>q.id.startsWith(id+'-outline-')).length,
+    total:questions.filter(q=>q.course===id && q.source!=='development').length}));
   if (!bank.courses[course]) throw new Error('请选择科目。');
   if (route === 'questions') {
     const mode=params.get('mode') || 'bank';
-    return questions.filter(q=>q.course===course && (mode!=='past' || q.source==='past') &&
+    return questions.filter(q=>q.course===course && (mode==='review' || (q.source==='development') === (mode==='development')) &&
+      (mode!=='outline' || q.id.startsWith(course+'-outline-')) &&
+      (mode!=='past' || q.source==='past') &&
       (mode!=='original' || q.source==='supplied') && (mode!=='review' || needsReview(q)))
       .map(q=>({...publicQuestion(q), ...(mode==='review' ? {misses:data.wrong[q.id].misses} : {})}));
   }
@@ -100,7 +104,7 @@ async function localApi(path, body) {
       let picked=[];
       for (const module of bank.modules[course]) {
         const kind=body.kind || 'objective';
-        const pool=questions.filter(q=>q.course===course && q.module===module.name &&
+        const pool=questions.filter(q=>q.course===course && q.module===module.name && q.source!=='development' &&
           ['single','multiple','judge','number','code'].includes(q.type) &&
           (kind==='all' || kind===q.type || (kind==='objective' && q.type!=='code')));
         const count=body.counts[module.name] || 0;
