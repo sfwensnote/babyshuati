@@ -184,16 +184,31 @@ function renderPractice() {
     '</div>' : '<div class="empty"><h2>' + (page === 'review' ? '这里暂时没有待复习的错题' : '这个模块暂时没有题目') +
     '</h2>' + (p.filter || Object.values(p.facets).some(Boolean) ? action('清除筛选','clear-filters') :
       '<a href="' + link(course.id,'bank') + '">进入题库</a>') + '</div>';
-  show(facetControls(p) + '<div class="workbench"><aside class="panel side modules" aria-label="模块">' + modules +
-    '</aside><section class="panel question">' + inner + '</section></div>');
+  const activeCount = Number(Boolean(p.filter)) + Object.values(p.facets).filter(Boolean).length;
+  show('<div class="workbench practice-workbench"><button type="button" class="filter-toggle" data-action="toggle-filters"' +
+    ' aria-controls="practice-filters" aria-expanded="' + Boolean(p.filtersOpen) + '">筛选题目' +
+    (activeCount ? '<span>已选 ' + activeCount + ' 项</span>' : '') + '</button>' +
+    '<div id="practice-filters" class="practice-filters' + (p.filtersOpen ? ' is-open' : '') + '">' +
+    facetControls(p) + '<aside class="panel side modules" aria-label="模块">' + modules +
+    '</aside></div><section class="panel question">' + inner + '</section></div>');
 }
 function resetPractice(position) {
   Object.assign(practice, {index:position, selected:null, result:null, request:null, written:'', example:null});
   renderPractice();
 }
-function filterPractice() {
+function focusQuestionOnPhone() {
+  if (!matchMedia('(max-width: 750px), (max-width: 950px) and (orientation: landscape) and (pointer: coarse)').matches) return;
+  const stem = app.querySelector('#stem');
+  if (!stem) return;
+  stem.setAttribute('tabindex', '-1');
+  stem.focus({preventScroll:true});
+  stem.closest('.question').scrollIntoView({block:'start'});
+}
+function filterPractice(control) {
   practice.items = practice.all.filter(q => matchesFilter(q,practice.filter) && matchesFacets(q,practice.facets));
   resetPractice(0);
+  if (control?.name) app.querySelector('[name="' + CSS.escape(control.name) + '"]')?.focus({preventScroll:true});
+  else if (control?.dataset.action === 'filter') app.querySelector('.modules .chosen')?.focus({preventScroll:true});
 }
 async function loadExams(version) {
   const data = await api('exams' + args({course:course.id}));
@@ -296,7 +311,7 @@ app.addEventListener('change', event => {
   if (option.name?.startsWith('facet-')) {
     practice.facets[option.name.slice(6)] = option.value;
     if (option.name === 'facet-topicCode' && option.value) practice.filter = '';
-    return filterPractice();
+    return filterPractice(option);
   }
   if (option.name !== 'answer' && !(page === 'exam' && ['number','exam-written'].includes(option.name))) return;
   const selected = option.name === 'exam-written' ? option.value : option.name === 'number' ? numericAnswer(option.value) : option.type === 'checkbox' ?
@@ -345,16 +360,24 @@ app.addEventListener('click', event => {
   if (id === 'reload' || id === 'exam-back') return navigate();
   if (id === 'filter') {
     practice.filter = value;
-    return filterPractice();
+    return filterPractice(button);
   }
   if (id === 'clear-filters') {
     practice.filter='';
     practice.facets={source:'',topicCode:'',type:''};
     return filterPractice();
   }
-  if (id === 'practice-prev') return resetPractice(practice.index-1);
+  if (id === 'toggle-filters') {
+    practice.filtersOpen = !practice.filtersOpen;
+    button.setAttribute('aria-expanded', String(practice.filtersOpen));
+    app.querySelector('#practice-filters').classList.toggle('is-open', practice.filtersOpen);
+    return;
+  }
+  if (id === 'practice-prev') { resetPractice(practice.index-1); return focusQuestionOnPhone(); }
   if (id === 'practice-next') {
-    return practice.index+1 < practice.items.length ? resetPractice(practice.index+1) : navigate();
+    if (practice.index+1 >= practice.items.length) return navigate();
+    resetPractice(practice.index+1);
+    return focusQuestionOnPhone();
   }
   if (id === 'example') {
     return change(async current => {
@@ -375,7 +398,7 @@ app.addEventListener('click', event => {
       if (current()) { p.result=result; renderPractice(); }
     });
   }
-  if (id === 'jump') { index=Number(value); return renderExam(); }
+  if (id === 'jump') { index=Number(value); renderExam(); return focusQuestionOnPhone(); }
   if (id === 'open-history') {
     return change(async current => {
       const result = await api('exam' + args({course:course.id,id:value}));
