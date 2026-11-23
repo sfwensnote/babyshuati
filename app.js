@@ -212,7 +212,7 @@ function setupExam() {
     '<p class="config-total">共 <strong id="total">20</strong> 题</p><button class="primary">开始考试</button></form></section>' +
     '<section class="panel"><h2>考试历史</h2><div class="history">' +
     (history.length ? history.map(h => action('<span>' + esc(date(h.finished)) + '</span><strong>' +
-      (h.pending ? h.pending + ' 道待自评' : h.correct + ' / ' + h.total) +
+      (h.pending ? h.pending + ' 道待自评' : h.total ? h.correct + ' / ' + h.total : '不计分') +
       '</strong>','open-history',{value:h.id})).join('') : '<p class="muted">暂无已交卷的考试。</p>') +
     '</div></section></div>');
   updateExamCounts('objective');
@@ -238,9 +238,10 @@ function configTotal() {
 function renderExam() {
   const q = exam.questions[index];
   const total = exam.questions.length;
+  const gradedTotal = exam.gradedTotal ?? total;
   const count = Object.keys(exam.answers).length;
   const markers = exam.questions.map((item,i) => {
-    const grade = item.type === 'code' ? exam.grades?.[item.id] : exam.answers[item.id] === item.correct ? 1 : 0;
+    const grade = item.type === 'code' ? exam.grades?.[item.id] : item.correct === null ? null : exam.answers[item.id] === item.correct ? 1 : 0;
     const status = exam.finished && grade === undefined ? 'pending' : exam.finished && grade === 0 ? 'miss' :
       item.id in exam.answers ? 'answered' : '';
     return '<button type="button" data-action="jump" data-value="' + i + '" class="' + status +
@@ -248,7 +249,8 @@ function renderExam() {
       '"' + (index===i?' aria-current="step"':'') + '>' + (i+1) + '</button>';
   }).join('');
   const side = exam.finished ? (exam.pending ? '<h2>大题待自评</h2><p>还有 ' + exam.pending + ' 道大题待自评</p>' :
-    '<h2>考试成绩</h2><p><strong>' + percent(exam.correct,total) + ' 分</strong> · 答对 ' + exam.correct + ' / ' + total + '</p>') :
+    '<h2>考试成绩</h2>' + (gradedTotal ? '<p><strong>' + percent(exam.correct,gradedTotal) + ' 分</strong> · 答对 ' + exam.correct + ' / ' + gradedTotal + '</p>' : '<p>本卷没有计分题。</p>') +
+    (gradedTotal < total ? '<p class="muted">' + (total - gradedTotal) + ' 道参考题不计分。</p>' : '')) :
     '<h2>答题卡</h2><p class="muted">已答 ' + count + ' / ' + total + '</p>';
   const needsGrade = exam.finished && q.type === 'code' && exam.grades[q.id] === undefined;
   const footer = exam.finished ? (needsGrade ? action('自评正确','grade-exam',{value:1,kind:'primary'}) +

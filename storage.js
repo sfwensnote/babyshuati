@@ -53,7 +53,9 @@ function examView(exam, bank) {
   if (exam.finished) {
     result.grades = exam.grades || {};
     result.pending = questions.filter(q=>q.type==='code' && !(q.id in result.grades)).length;
-    if (!result.pending) result.correct = questions.reduce((n,q)=>n + (q.type==='code' ? Number(result.grades[q.id]===1) : Number(exam.answers[q.id]===q.correct)),0);
+    const gradable = questions.filter(q=>q.correct!==null);
+    result.gradedTotal = gradable.length;
+    if (!result.pending) result.correct = gradable.reduce((n,q)=>n + (q.type==='code' ? Number(result.grades[q.id]===1) : Number(exam.answers[q.id]===q.correct)),0);
   }
   return result;
 }
@@ -64,9 +66,10 @@ async function localApi(path, body) {
   const params = new URLSearchParams(query);
   const course = body?.course || params.get('course');
   const questions = bank.questions;
+  const needsReview = q => q.correct !== null && data.wrong[q.id]?.active;
   if (route === 'overview') return Object.entries(bank.courses).map(([id,name])=>({id,name,modules:bank.modules[id],
     practiced:new Set(data.attempts.filter(a=>a.question.startsWith(id+'-')).map(a=>a.question)).size,
-    wrong:Object.entries(data.wrong).filter(([key,w])=>key.startsWith(id+'-') && w.active).length,
+    wrong:questions.filter(q=>q.course===id && needsReview(q)).length,
     originals:questions.filter(q=>q.course===id && q.source==='supplied').length,
     pasts:questions.filter(q=>q.course===id && q.source==='past').length,
     total:questions.filter(q=>q.course===id).length}));
@@ -74,7 +77,7 @@ async function localApi(path, body) {
   if (route === 'questions') {
     const mode=params.get('mode') || 'bank';
     return questions.filter(q=>q.course===course && (mode!=='past' || q.source==='past') &&
-      (mode!=='original' || q.source==='supplied') && (mode!=='review' || data.wrong[q.id]?.active))
+      (mode!=='original' || q.source==='supplied') && (mode!=='review' || needsReview(q)))
       .map(q=>({...publicQuestion(q), ...(mode==='review' ? {misses:data.wrong[q.id].misses} : {})}));
   }
   if (route === 'answer' || route === 'answer/example') {
@@ -89,7 +92,7 @@ async function localApi(path, body) {
   if (route === 'exams') {
     const all = data.exams.filter(e=>e.course===course).sort((a,b)=>b.id-a.id);
     return {active:all.find(e=>!e.finished) ? examView(all.find(e=>!e.finished),bank) : null,
-      history:all.filter(e=>e.finished).map(e=>{const v=examView(e,bank); return {id:v.id,total:v.questions.length,correct:v.correct,pending:v.pending,finished:v.finished};})};
+      history:all.filter(e=>e.finished).map(e=>{const v=examView(e,bank); return {id:v.id,total:v.gradedTotal,correct:v.correct,pending:v.pending,finished:v.finished};})};
   }
   if (route === 'exam/start') {
     let exam=data.exams.find(e=>e.course===course && !e.finished);
