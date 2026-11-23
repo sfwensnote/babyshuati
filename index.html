@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f0f6f2">
+<title>刷题</title>
+<link rel="stylesheet" href="style.css">
+<script src="storage.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<header class="top"><div class="shell"><a href="#" class="home-link">科目</a><div id="switcher"></div></div></header>
+<main class="shell" id="app" aria-busy="true"></main>
+<div id="notice" role="status"></div>
+<footer class="shell storage-tools"><button id="export-data" type="button">导出学习数据</button> <label class="button">恢复学习数据<input id="import-data" type="file" accept="application/json,.json" hidden></label><span>数据保存在当前浏览器</span></footer>
+</body>
+</html>
